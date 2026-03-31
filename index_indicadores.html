@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saúde 360 - Gestão Inteligente de Indicadores</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sidebar-item-active { background: #1e40af; border-left: 4px solid #60a5fa; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .hide { display: none !important; }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+        .table-row-ok { background-color: #ecfdf5; }
+        .atrasado { color: #ef4444; font-weight: bold; }
+        .no-prazo { color: #10b981; font-weight: bold; }
+        .alerta-intervalo { color: #f97316; font-size: 10px; font-weight: bold; line-height: 1.2; display: inline-block; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col md:flex-row font-sans text-gray-800">
+
+    <aside class="w-full md:w-64 bg-blue-900 text-white shadow-2xl flex-shrink-0 z-40">
+        <div class="p-6 text-center border-b border-blue-800">
+            <i class="fas fa-heart-pulse text-4xl text-blue-400 mb-2"></i>
+            <h1 class="text-xl font-bold uppercase tracking-tighter">Saúde Brasil 360</h1>
+            <p class="text-xs text-blue-300">Microárea Inteligente</p>
+        </div>
+        <nav class="mt-4 flex flex-col gap-1 p-2">
+            <button onclick="showTab('tabDash')" id="btn-tabDash" class="sidebar-item-active flex items-center p-3 rounded-lg hover:bg-blue-800 transition">
+                <i class="fas fa-chart-pie w-6"></i> Dashboard
+            </button>
+            <button onclick="showTab('tabPessoas')" id="btn-tabPessoas" class="flex items-center p-3 rounded-lg hover:bg-blue-800 transition">
+                <i class="fas fa-users w-6"></i> Cidadãos
+            </button>
+            <button onclick="showTab('tabMonitoramento')" id="btn-tabMonitoramento" class="flex items-center p-3 rounded-lg hover:bg-blue-800 transition">
+                <i class="fas fa-list-check w-6"></i> Indicadores
+            </button>
+            <button onclick="showTab('tabConfig')" id="btn-tabConfig" class="flex items-center p-3 rounded-lg hover:bg-blue-800 transition">
+                <i class="fas fa-database w-6"></i> Dados
+            </button>
+        </nav>
+    </aside>
+
+    <main class="flex-grow p-4 md:p-6 overflow-y-auto max-h-screen">
+        
+        <div id="tabDash" class="tab-content active">
+            <header class="mb-6"><h2 class="text-3xl font-extrabold text-gray-800">Perfil da População (Microárea)</h2></header>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm border-l-8 border-blue-600 flex flex-col justify-center">
+                    <p class="text-gray-400 text-[10px] font-black uppercase">Total População</p>
+                    <h3 id="statTotal" class="text-4xl font-black text-gray-800">0</h3>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border">
+                    <h4 class="font-bold text-gray-700 mb-6 uppercase text-xs tracking-widest"><i class="fas fa-chart-bar mr-2"></i>Qtd. Pessoas por Indicador</h4>
+                    <canvas id="chartPopulacao" height="200"></canvas>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border flex flex-col justify-center">
+                    <h4 class="font-bold text-gray-700 mb-6 uppercase text-xs tracking-widest"><i class="fas fa-list mr-2"></i>Resumo da Microárea</h4>
+                    <div id="legendaGrafico" class="space-y-3 text-sm font-semibold text-gray-700"></div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border mb-8">
+                <h4 class="font-bold text-gray-700 mb-6 uppercase text-xs tracking-widest"><i class="fas fa-map-marker-alt mr-2"></i>Desempenho Geral por Rua (Indicadores Concluídos)</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-gray-50 text-gray-600 uppercase border-b">
+                            <tr><th class="p-3">Rua / Logradouro</th><th class="p-3 text-center">Cidadãos</th><th class="p-3 text-center">% Concluído</th><th class="p-3 w-1/3">Progresso</th></tr>
+                        </thead>
+                        <tbody id="tabelaRuasDashboard">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tabPessoas" class="tab-content">
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-bold text-blue-900">Gestão de Cidadãos</h2>
+                    <div class="flex flex-wrap gap-2 justify-end">
+                        <div class="relative">
+                            <input type="text" id="buscaNome" oninput="renderPessoas()" placeholder="Buscar Nome/CPF..." class="pl-10 pr-4 py-2 border rounded-lg w-40 md:w-56 focus:ring-2 focus:ring-blue-500">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400 text-sm"></i>
+                        </div>
+                        <button onclick="abrirModalCidadao()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg transition shadow">
+                            <i class="fas fa-user-plus md:mr-2"></i> <span class="hidden md:inline">Novo Cidadão</span>
+                        </button>
+                        <button onclick="excluirTodosCidadaos()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg transition shadow">
+                            <i class="fas fa-trash-alt md:mr-2"></i> <span class="hidden md:inline">Excluir Todos</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto border rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase">Cidadão / ID / Endereço</th>
+                                <th class="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase">Acompanhamentos Vinculados</th>
+                                <th class="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpoPessoas" class="text-sm divide-y divide-gray-100 uppercase"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tabMonitoramento" class="tab-content">
+            <div class="bg-white p-6 rounded-xl shadow-sm mb-6 border-t-8 border-blue-600 min-h-[70vh]">
+                <h2 class="text-2xl font-bold mb-4">Painel de Indicadores e Metas</h2>
+                
+                <div class="flex flex-col md:flex-row gap-4 w-full md:w-3/4 mb-8">
+                    <div class="w-full md:w-1/3">
+                        <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Filtro de Rua</label>
+                        <select id="filtroRuaMon" onchange="renderSelectMonitoramento()" class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 font-bold text-blue-900 uppercase">
+                            <option value="">Todas as Ruas</option>
+                        </select>
+                    </div>
+                    <div class="w-full md:w-2/3">
+                        <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Digitar Nome do Cidadão</label>
+                        <input type="text" id="inputBuscaPessoaMon" list="listaPessoasMon" placeholder="Digite para pesquisar..." onchange="handleBuscaIndicador()" class="w-full p-3 border border-blue-400 rounded-lg bg-white shadow-inner font-bold text-blue-900 uppercase focus:ring-2 focus:ring-blue-500">
+                        <datalist id="listaPessoasMon"></datalist>
+                    </div>
+                </div>
+
+                <div id="areaChecklists" class="hide">
+                    <div class="p-6 bg-gray-50 rounded-xl border border-gray-200 flex flex-col mb-8 shadow-sm">
+                        <h3 id="nomeMon" class="text-2xl font-black text-blue-900 uppercase">NOME DO CIDADÃO</h3>
+                        <p id="detalhesMon" class="text-sm text-gray-600 font-bold mt-1 uppercase"></p>
+                    </div>
+                    <div class="space-y-8" id="gridChecklists"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tabConfig" class="tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-10">
+                <div class="bg-white p-10 rounded-xl shadow-sm text-center border-b-4 border-green-500">
+                    <i class="fas fa-file-export text-6xl text-green-500 mb-4"></i>
+                    <h3 class="text-xl font-bold mb-2">Exportar Backup</h3>
+                    <p class="text-xs text-gray-500 mb-4 uppercase font-bold">Salva todo o seu trabalho (Cadastros + Tabelas)</p>
+                    <button onclick="exportarDados()" class="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-lg shadow transition">BAIXAR ARQUIVO (.JSON)</button>
+                </div>
+                <div class="bg-white p-10 rounded-xl shadow-sm text-center border-b-4 border-yellow-500">
+                    <i class="fas fa-file-import text-6xl text-yellow-500 mb-4"></i>
+                    <h3 class="text-xl font-bold mb-2">Importar Dados</h3>
+                    <p class="text-xs text-gray-500 mb-4 uppercase font-bold">Restaura um arquivo gerado anteriormente</p>
+                    <input type="file" id="importFile" class="hidden" accept=".json" onchange="importarDados(event)">
+                    <button onclick="document.getElementById('importFile').click()" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-black py-4 rounded-lg shadow transition">SELECIONAR ARQUIVO</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="modalCidadao" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 md:p-8 border-t-8 border-blue-600 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="tituloModalCid" class="text-2xl font-black text-blue-900 uppercase">Cidadão</h2>
+                <button onclick="fecharModalCidadao()" class="text-gray-400 hover:text-red-500 transition"><i class="fas fa-times text-2xl"></i></button>
+            </div>
+            
+            <form id="formCidadao" onsubmit="salvarCidadao(event)" class="space-y-4">
+                <input type="hidden" id="cidId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-[10px] font-black text-gray-500 uppercase mb-1">Nome Completo</label>
+                        <input type="text" id="cidNome" required class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-bold text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-gray-500 uppercase mb-1">CPF / CNS</label>
+                        <input type="text" id="cidCpf" class="w-full p-2.5 border rounded-lg text-sm font-medium">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-gray-500 uppercase mb-1">Data de Nascimento (Cálculos)</label>
+                        <input type="date" id="cidNasc" required class="w-full p-2.5 border rounded-lg text-sm font-bold text-blue-800 bg-blue-50">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-[10px] font-black text-gray-500 uppercase mb-1">Rua / Logradouro</label>
+                        <input type="text" id="cidRua" required class="w-full p-2.5 border rounded-lg text-sm uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-gray-500 uppercase mb-1">Nº da Casa</label>
+                        <input type="text" id="cidNumero" class="w-full p-2.5 border rounded-lg text-sm uppercase">
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-black text-gray-500 uppercase mb-1">Sexo</label>
+                        <select id="cidSexo" class="w-full p-2.5 border rounded-lg bg-white text-sm font-bold">
+                            <option value="M">MASCULINO</option>
+                            <option value="F">FEMININO</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-gray-500 uppercase mb-1">Telefone</label>
+                        <input type="text" id="cidTel" class="w-full p-2.5 border rounded-lg text-sm">
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-xs font-black text-blue-900 uppercase mb-3 border-b pb-1">Selecione os Acompanhamentos</label>
+                    <div class="grid grid-cols-1 gap-2" id="containerCheckboxesCondicoes"></div>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-lg shadow-md transition">SALVAR CIDADÃO</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // DADOS CORE E CATEGORIAS OFICIAIS
+        // ==========================================
+        const categoriasOficiais = [
+            { id: "C2", nome: "Desenvolvimento Infantil", cor: "#10b981", bgCor: "bg-emerald-50", bordaCor: "border-emerald-500", textCor: "text-emerald-800" },
+            { id: "C3", nome: "Cuidado da Gestante e da Puérpera", cor: "#ec4899", bgCor: "bg-pink-50", bordaCor: "border-pink-500", textCor: "text-pink-800" },
+            { id: "C4", nome: "Cuidado da Pessoa com Diabetes", cor: "#f97316", bgCor: "bg-orange-50", bordaCor: "border-orange-500", textCor: "text-orange-800" },
+            { id: "C5", nome: "Cuidado da Pessoa com Hipertensão", cor: "#ef4444", bgCor: "bg-red-50", bordaCor: "border-red-500", textCor: "text-red-800" },
+            { id: "C6", nome: "Cuidado da Pessoa Idosa", cor: "#8b5cf6", bgCor: "bg-purple-50", bordaCor: "border-purple-500", textCor: "text-purple-800" },
+            { id: "C7", nome: "Prevenção do Câncer na Mulher", cor: "#3b82f6", bgCor: "bg-blue-50", bordaCor: "border-blue-500", textCor: "text-blue-800" }
+        ];
+
+        let db = JSON.parse(localStorage.getItem('saude360_db_v10')) || { pessoas: [], checklists: {} };
+        if(!db.pessoas) db.pessoas = [];
+        if(!db.checklists) db.checklists = {};
+        const ANO_ATUAL = new Date().getFullYear();
+
+        function salvarDB() { localStorage.setItem('saude360_db_v10', JSON.stringify(db)); }
+
+        // --- FUNÇÕES ÚTEIS E DE DATA ---
+        function formatarDataBR(dataStr) {
+            if(!dataStr) return '--/--/----';
+            return dataStr.split('-').reverse().join('/');
+        }
+        function calcularIdadeAnos(dataNasc) {
+            if(!dataNasc) return 0;
+            const b = new Date(dataNasc + 'T12:00:00'); 
+            if(isNaN(b.getTime())) return 0;
+            const t = new Date(); let a = t.getFullYear() - b.getFullYear();
+            if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) a--;
+            return a;
+        }
+        function calcularDataLimite(dataNasc, dias = 0, meses = 0) {
+            if(!dataNasc) return new Date();
+            let d = new Date(dataNasc + 'T12:00:00');
+            if(isNaN(d.getTime())) return new Date();
+            if (dias > 0) d.setDate(d.getDate() + dias);
+            if (meses > 0) d.setMonth(d.getMonth() + meses);
+            return d;
+        }
+        function calcularDPP(dataDUM) {
+            if(!dataDUM) return null;
+            let d = new Date(dataDUM + 'T12:00:00');
+            if(isNaN(d.getTime())) return null;
+            d.setDate(d.getDate() + 7); d.setMonth(d.getMonth() + 9);
+            return d;
+        }
+        function diferencaDias(d1_str, d2_str) {
+            if(!d1_str || !d2_str) return null;
+            const d1 = new Date(d1_str + 'T12:00:00'); const d2 = new Date(d2_str + 'T12:00:00');
+            if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return null;
+            return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
+        }
+        function somarAnosStr(dataStr, anos) {
+            if(!dataStr) return null;
+            let d = new Date(dataStr + 'T12:00:00');
+            if (isNaN(d.getTime())) return null;
+            d.setFullYear(d.getFullYear() + anos); return d;
+        }
+        function verificarPrazo(dataLimiteObj) {
+            if(!dataLimiteObj || isNaN(dataLimiteObj.getTime())) return '<span class="text-gray-400">AGUARDANDO</span>';
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            const lim = new Date(dataLimiteObj); lim.setHours(0,0,0,0);
+            const diffDias = Math.floor((lim - hoje) / (1000 * 60 * 60 * 24));
+            if (diffDias < 0) return `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-black">VENCIDO (${Math.abs(diffDias)} dias)</span>`;
+            if (diffDias <= 30) return `<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-[10px] font-black">VENCE EM ${diffDias} DIAS</span>`;
+            const meses = Math.floor(diffDias / 30);
+            return `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-[10px] font-black">EM DIA (${meses} meses)</span>`;
+        }
+        function verificarStatus(dataLimiteObj) {
+            if(!dataLimiteObj || isNaN(dataLimiteObj.getTime())) return '<span class="text-gray-400">-</span>';
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            return hoje > dataLimiteObj ? '<span class="atrasado">ATRASADO</span>' : '<span class="no-prazo">DENTRO DO PRAZO</span>';
+        }
+        function formatarDataDisplay(d) { return (d && !isNaN(d.getTime())) ? d.toLocaleDateString('pt-BR') : '--/--/----'; }
+
+        window.recarregarMonitoramento = function(pid, keyToSave, val) {
+            salvarSmartNota(pid, keyToSave, val);
+            carregarMonitoramento(pid);
+        }
+
+        // --- UI GERAL E EXCLUSÃO ---
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('aside button').forEach(b => b.classList.remove('sidebar-item-active'));
+            document.getElementById(tabId).classList.add('active');
+            document.getElementById('btn-' + tabId).classList.add('sidebar-item-active');
+            if (tabId === 'tabDash') renderDashboard();
+            if (tabId === 'tabPessoas') renderPessoas();
+            if (tabId === 'tabMonitoramento') renderSelectMonitoramento();
+        }
+
+        function excluirCidadao(id) {
+            if(confirm("Tem certeza que deseja EXCLUIR este cidadão? Todo o histórico de monitoramento dele será perdido para sempre.")) {
+                db.pessoas = db.pessoas.filter(p => p.id !== id);
+                delete db.checklists[id];
+                salvarDB();
+                renderPessoas();
+            }
+        }
+
+        function excluirTodosCidadaos() {
+            if(confirm("ATENÇÃO PERIGO: Deseja realmente EXCLUIR TODOS OS CIDADÃOS cadastrados no sistema?")) {
+                if(confirm("ÚLTIMO AVISO: Esta ação não pode ser desfeita. Confirmar exclusão geral?")) {
+                    db.pessoas = [];
+                    db.checklists = {};
+                    salvarDB();
+                    renderPessoas();
+                    document.getElementById('areaChecklists').classList.add('hide');
+                    alert("Banco de dados apagado com sucesso.");
+                }
+            }
+        }
+
+        // --- GESTÃO DE CIDADÃOS ---
+        function abrirModalCidadao(id = null) {
+            document.getElementById('formCidadao').reset();
+            const contCond = document.getElementById('containerCheckboxesCondicoes');
+            contCond.innerHTML = '';
+            categoriasOficiais.forEach(cat => {
+                contCond.innerHTML += `
+                    <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition border-gray-200">
+                        <input type="checkbox" name="condicoes" value="${cat.nome}" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500">
+                        <span class="text-sm font-bold text-gray-700">${cat.id} - ${cat.nome}</span>
+                    </label>
+                `;
+            });
+            if(id) {
+                const p = db.pessoas.find(x => x.id === id);
+                document.getElementById('tituloModalCid').innerText = "Editar Cidadão";
+                document.getElementById('cidId').value = p.id;
+                document.getElementById('cidNome').value = p.nome || '';
+                document.getElementById('cidCpf').value = p.cpf || '';
+                document.getElementById('cidNasc').value = p.dataNasc || '';
+                document.getElementById('cidSexo').value = p.sexo || 'M';
+                document.getElementById('cidTel').value = p.telefone || '';
+                document.getElementById('cidRua').value = p.rua || '';
+                document.getElementById('cidNumero').value = p.numero || '';
+                document.getElementsByName('condicoes').forEach(cb => {
+                    if((p.condicoesArray || []).includes(cb.value)) cb.checked = true;
+                });
+            } else {
+                document.getElementById('tituloModalCid').innerText = "Novo Cidadão";
+                document.getElementById('cidId').value = "";
+            }
+            document.getElementById('modalCidadao').classList.remove('hidden');
+        }
+
+        function fecharModalCidadao() { document.getElementById('modalCidadao').classList.add('hidden'); }
+
+        function salvarCidadao(e) {
+            e.preventDefault();
+            const id = document.getElementById('cidId').value;
+            let conds = [];
+            document.getElementsByName('condicoes').forEach(cb => { if(cb.checked) conds.push(cb.value); });
+            const novo = {
+                id: id || Date.now().toString(),
+                nome: document.getElementById('cidNome').value.toUpperCase(),
+                cpf: document.getElementById('cidCpf').value,
+                dataNasc: document.getElementById('cidNasc').value,
+                sexo: document.getElementById('cidSexo').value,
+                telefone: document.getElementById('cidTel').value,
+                rua: document.getElementById('cidRua').value.toUpperCase(),
+                numero: document.getElementById('cidNumero').value.toUpperCase(),
+                condicoesArray: conds
+            };
+            if(id) db.pessoas[db.pessoas.findIndex(x => x.id === id)] = novo;
+            else db.pessoas.push(novo);
+            salvarDB(); fecharModalCidadao(); renderPessoas();
+        }
+
+        function renderPessoas() {
+            const busca = document.getElementById('buscaNome').value.toUpperCase();
+            const corpo = document.getElementById('corpoPessoas');
+            corpo.innerHTML = '';
+            db.pessoas.forEach(p => {
+                if(!p.nome.includes(busca) && !(p.cpf && p.cpf.includes(busca))) return;
+                let labelsHtml = (p.condicoesArray || []).map(c => {
+                    const catObj = categoriasOficiais.find(cat => cat.nome === c);
+                    return `<span class="inline-block mr-1 mb-1 px-2 py-1 ${catObj.bgCor} border ${catObj.bordaCor} ${catObj.textCor} rounded text-[10px] font-black uppercase">${catObj.id} - ${c}</span>`;
+                }).join('');
+                if(!p.condicoesArray || p.condicoesArray.length === 0) labelsHtml = `<span class="text-gray-400 text-[10px] uppercase font-bold">Sem vinculação</span>`;
+                corpo.innerHTML += `
+                    <tr class="hover:bg-blue-50 border-b border-gray-100 transition">
+                        <td class="px-4 py-4 font-black text-gray-800">${p.nome}<br>
+                            <span class="text-[10px] text-gray-500 font-medium tracking-wide">ID/DOC: ${p.cpf || 'N/I'} | Nasc: ${formatarDataBR(p.dataNasc)}</span><br>
+                            <span class="text-[10px] text-blue-600 font-bold"><i class="fas fa-map-marker-alt"></i> ${p.rua || 'RUA NÃO INFORMADA'}, Nº ${p.numero || 'S/N'}</span>
+                        </td>
+                        <td class="px-4 py-4">${labelsHtml}</td>
+                        <td class="px-4 py-4 text-center">
+                            <div class="flex justify-center gap-2">
+                                <button onclick="abrirModalCidadao('${p.id}')" class="text-blue-600 bg-white border border-blue-200 hover:bg-blue-100 p-2.5 rounded-lg shadow-sm" title="Editar"><i class="fas fa-edit"></i></button>
+                                <button onclick="irParaChecklist('${p.id}')" class="text-green-600 bg-white border border-green-200 hover:bg-green-100 p-2.5 rounded-lg shadow-sm" title="Indicadores"><i class="fas fa-table"></i></button>
+                                <button onclick="excluirCidadao('${p.id}')" class="text-red-600 bg-white border border-red-200 hover:bg-red-100 p-2.5 rounded-lg shadow-sm" title="Excluir Cidadão"><i class="fas fa-trash-alt"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function irParaChecklist(id) { showTab('tabMonitoramento'); document.getElementById('inputBuscaPessoaMon').value = ''; carregarMonitoramento(id); }
+
+        // ==========================================
+        // MOTOR DE RENDERIZAÇÃO DOS FORMULÁRIOS
+        // ==========================================
+        function renderSelectMonitoramento() {
+            const filtroRua = document.getElementById('filtroRuaMon').value;
+            const datalist = document.getElementById('listaPessoasMon');
+            datalist.innerHTML = '';
+            
+            let pessoasFiltradas = db.pessoas.sort((a,b) => a.nome.localeCompare(b.nome));
+            if(filtroRua) pessoasFiltradas = pessoasFiltradas.filter(p => p.rua === filtroRua);
+
+            pessoasFiltradas.forEach(p => {
+                datalist.innerHTML += `<option value="${p.nome} | ID: ${p.id}">`;
+            });
+
+            // Popula o select de ruas se for o primeiro load
+            const selectRua = document.getElementById('filtroRuaMon');
+            if(selectRua.options.length <= 1) {
+                const ruasSet = new Set();
+                db.pessoas.forEach(p => { if(p.rua) ruasSet.add(p.rua); });
+                const ruasArr = Array.from(ruasSet).sort();
+                ruasArr.forEach(r => { selectRua.innerHTML += `<option value="${r}">${r}</option>`; });
+            }
+        }
+
+        function handleBuscaIndicador() {
+            const val = document.getElementById('inputBuscaPessoaMon').value;
+            if(val && val.includes('| ID: ')) {
+                const id = val.split('| ID: ')[1].trim();
+                carregarMonitoramento(id);
+            }
+        }
+
+        function carregarMonitoramento(id) {
+            const area = document.getElementById('areaChecklists');
+            const grid = document.getElementById('gridChecklists');
+            if(!id) { area.classList.add('hide'); return; }
+            area.classList.remove('hide');
+            
+            const p = db.pessoas.find(x => x.id === id);
+            document.getElementById('nomeMon').innerText = p.nome;
+            document.getElementById('detalhesMon').innerText = `IDADE: ${calcularIdadeAnos(p.dataNasc)} ANOS | END: ${p.rua || 'N/I'}, ${p.numero || 'S/N'}`;
+            
+            if(!p.condicoesArray || p.condicoesArray.length === 0) {
+                grid.innerHTML = `<div class="p-8 text-center text-gray-400 font-bold border-2 border-dashed rounded-lg">Cidadão não vinculado a nenhum Indicador. Edite o cadastro.</div>`;
+                return;
+            }
+
+            let HTMLCompleto = '';
+            p.condicoesArray.forEach(condNome => {
+                try {
+                    if(condNome === "Desenvolvimento Infantil") HTMLCompleto += renderC2(p);
+                    else if (condNome === "Cuidado da Gestante e da Puérpera") HTMLCompleto += renderC3(p);
+                    else if (condNome === "Cuidado da Pessoa com Diabetes") HTMLCompleto += renderC4(p);
+                    else if (condNome === "Cuidado da Pessoa com Hipertensão") HTMLCompleto += renderC5(p);
+                    else if (condNome === "Cuidado da Pessoa Idosa") HTMLCompleto += renderC6(p);
+                    else if (condNome === "Prevenção do Câncer na Mulher") HTMLCompleto += renderC7(p);
+                } catch (e) {
+                    console.error("Erro ao gerar módulo:", condNome, e);
+                    HTMLCompleto += `<div class="p-4 bg-red-100 text-red-700 font-bold rounded mb-4 shadow">Erro crítico no formulário: ${condNome}</div>`;
+                }
+            });
+            grid.innerHTML = HTMLCompleto;
+        }
+
+        // Funções Globais de Salvamento
+        function salvarSmart(pid, key, val) {
+            if(!db.checklists) db.checklists = {};
+            if(!db.checklists[pid]) db.checklists[pid] = {};
+            db.checklists[pid][key] = { checked: val };
+            salvarDB();
+        }
+        function salvarSmartNota(pid, key, val) {
+            if(!db.checklists) db.checklists = {};
+            if(!db.checklists[pid]) db.checklists[pid] = {};
+            db.checklists[pid][key] = val; 
+            salvarDB();
+        }
+        function getSmart(pid, key) {
+            if(!db.checklists || !db.checklists[pid]) return '';
+            return (db.checklists[pid][key] && db.checklists[pid][key].checked === true) ? 'checked' : '';
+        }
+        function getSmartNota(pid, key) {
+            if(!db.checklists || !db.checklists[pid]) return '';
+            return db.checklists[pid][key] || '';
+        }
+
+        // ==========================================
+        // RENDERIZAÇÃO DOS CADERNOS (C2 a C7)
+        // ==========================================
+        function renderC2(pessoa) {
+            const nasc = pessoa.dataNasc;
+            if(!nasc) return `<div class="p-6 bg-red-50 text-red-600 font-bold rounded-lg border border-red-200 mb-4">Atenção: Preencha a Data de Nascimento para liberar o módulo Infantil.</div>`;
+            const data30d = calcularDataLimite(nasc, 30);
+            const data6m = calcularDataLimite(nasc, 0, 6);
+            let html = `
+                <div class="space-y-6 mb-8 border p-4 rounded-xl bg-white shadow-sm border-emerald-300">
+                    <h3 class="text-xl font-black text-emerald-800 uppercase mb-4"><i class="fas fa-baby mr-2"></i>C.2 - Desenvolvimento Infantil</h3>
+                    <div class="bg-white border-2 border-emerald-500 rounded-lg overflow-hidden">
+                        <div class="bg-emerald-500 text-white p-3 font-bold">VISITAS ACS / TACS</div>
+                        <table class="w-full text-sm">
+                            <tr class="border-b bg-gray-50 font-bold"><td class="p-3">Descrição</td><td class="p-3">Prazo Limite</td><td class="p-3">Status</td><td class="p-3 text-center">Realizada?</td></tr>
+                            <tr>
+                                <td class="p-3 font-semibold">1ª Visita (até 30 dias)</td><td class="p-3">${formatarDataDisplay(data30d)}</td><td class="p-3">${verificarStatus(data30d)}</td>
+                                <td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${pessoa.id}', 'c2_v30', this.checked)" ${getSmart(pessoa.id, 'c2_v30')} class="w-5 h-5 rounded text-emerald-600 cursor-pointer"></td>
+                            </tr>
+                            <tr>
+                                <td class="p-3 font-semibold">2ª Visita (até 6 meses)</td><td class="p-3">${formatarDataDisplay(data6m)}</td><td class="p-3">${verificarStatus(data6m)}</td>
+                                <td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${pessoa.id}', 'c2_v6m', this.checked)" ${getSmart(pessoa.id, 'c2_v6m')} class="w-5 h-5 rounded text-emerald-600 cursor-pointer"></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="bg-white border-2 border-emerald-500 rounded-lg overflow-hidden">
+                        <div class="bg-emerald-500 text-white p-3 font-bold">09 CONSULTAS (MÉDICA OU ENFERMEIRA)</div>
+                        <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-3">`;
+            for(let i=1; i<=9; i++) {
+                const key = `cons_${i}`;
+                html += `
+                    <div class="border border-emerald-200 p-3 rounded-lg bg-emerald-50 shadow-sm">
+                        <div class="text-xs font-black text-emerald-900 mb-2">CONSULTA ${i}</div>
+                        <input type="date" class="w-full text-xs p-2 mb-2 border rounded" onchange="salvarSmartNota('${pessoa.id}', '${key}_data', this.value)" onblur="recarregarMonitoramento('${pessoa.id}', '${key}_data', this.value)" value="${getSmartNota(pessoa.id, key+'_data')}">
+                        <input type="text" placeholder="Observações..." class="w-full text-xs p-2 border rounded mb-2" onchange="salvarSmartNota('${pessoa.id}', '${key}_obs', this.value)" value="${getSmartNota(pessoa.id, key+'_obs')}">
+                        <label class="text-xs font-bold flex items-center gap-2 cursor-pointer text-emerald-900"><input type="checkbox" onchange="salvarSmart('${pessoa.id}', '${key}', this.checked)" ${getSmart(pessoa.id, key)} class="w-4 h-4 rounded text-emerald-600"> Realizada</label>
+                    </div>`;
+            }
+            html += `</div></div>
+                    <div class="bg-white border-2 border-emerald-500 rounded-lg overflow-hidden">
+                        <div class="bg-emerald-500 text-white p-3 font-bold">09 REGISTROS DE PESO E ALTURA</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-emerald-50 uppercase text-emerald-800">
+                                    <tr><th class="p-3">Nº</th><th class="p-3">Data</th><th class="p-3">Peso (kg)</th><th class="p-3">Altura (cm)</th><th class="p-3">Ação</th></tr>
+                                </thead>
+                                <tbody>`;
+            for(let i=1; i<=9; i++) {
+                const key = `pa_${i}`;
+                html += `
+                    <tr class="border-b hover:bg-emerald-50">
+                        <td class="p-3 font-bold text-emerald-800">${i}</td>
+                        <td class="p-3"><input type="date" class="border p-2 rounded" onchange="salvarSmartNota('${pessoa.id}', '${key}_data', this.value)" onblur="recarregarMonitoramento('${pessoa.id}', '${key}_data', this.value)" value="${getSmartNota(pessoa.id, key+'_data')}"></td>
+                        <td class="p-3"><input type="text" placeholder="0.000" class="w-20 border p-2 rounded" onchange="salvarSmartNota('${pessoa.id}', '${key}_p', this.value)" value="${getSmartNota(pessoa.id, key+'_p')}"></td>
+                        <td class="p-3"><input type="text" placeholder="00" class="w-20 border p-2 rounded" onchange="salvarSmartNota('${pessoa.id}', '${key}_a', this.value)" value="${getSmartNota(pessoa.id, key+'_a')}"></td>
+                        <td class="p-3"><label class="flex items-center gap-1 font-bold cursor-pointer text-emerald-800"><input type="checkbox" onchange="salvarSmart('${pessoa.id}', '${key}', this.checked)" ${getSmart(pessoa.id, key)} class="w-4 h-4 text-emerald-600 rounded"> OK</label></td>
+                    </tr>`;
+            }
+            html += `</tbody></table></div></div></div>`;
+            return html;
+        }
+
+        function renderC3(pessoa) {
+            const id = pessoa.id;
+            const dumVal = getSmartNota(id, 'c3_dum');
+            const dppObj = calcularDPP(dumVal);
+            const dppStr = dppObj ? formatarDataDisplay(dppObj) : 'Aguardando DUM';
+
+            let html = `
+                <div class="space-y-6 mb-8 border p-4 rounded-xl bg-white shadow-sm border-pink-300">
+                    <h3 class="text-xl font-black text-pink-800 uppercase mb-4"><i class="fas fa-person-pregnant mr-2"></i>C.3 - Gestante e Puérpera</h3>
+                    <div class="bg-pink-50 p-4 rounded-lg border border-pink-200 grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div><label class="block text-[10px] font-black text-pink-800 uppercase mb-1">DUM</label><input type="date" value="${dumVal}" onchange="salvarSmartNota('${id}', 'c3_dum', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_dum', this.value)" class="w-full p-2 border border-pink-300 rounded font-bold text-pink-900"></div>
+                        <div><label class="block text-[10px] font-black text-pink-800 uppercase mb-1">DPP (Calculada)</label><div class="w-full p-2 bg-white border border-pink-300 rounded font-bold text-gray-500">${dppStr}</div></div>
+                        <div><label class="block text-[10px] font-black text-pink-800 uppercase mb-1">Data do Parto</label><input type="date" value="${getSmartNota(id, 'c3_parto')}" onchange="salvarSmartNota('${id}', 'c3_parto', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_parto', this.value)" class="w-full p-2 border border-pink-300 rounded font-bold text-pink-900"></div>
+                    </div>
+                    <div class="bg-white border-2 border-pink-500 rounded-lg overflow-hidden">
+                        <div class="bg-pink-500 text-white p-3 font-bold uppercase">Pré-Natal (Mínimo 7 Consultas)</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-pink-50 uppercase text-pink-800">
+                                    <tr><th class="p-3">Nº</th><th class="p-3">Data</th><th class="p-3">IG (Sem)</th><th class="p-3">PA (mmHg)</th><th class="p-3">Peso/Alt</th><th class="p-3">Profissional</th><th class="p-3">OK</th></tr>
+                                </thead>
+                                <tbody>`;
+            for(let i=1; i<=8; i++) {
+                const key = `c3_cons_${i}`;
+                const label = i === 8 ? 'Extra' : `${i}ª`;
+                html += `
+                    <tr class="border-b hover:bg-pink-50">
+                        <td class="p-3 font-bold text-pink-800">${label}</td>
+                        <td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', '${key}_data', this.value)" onblur="recarregarMonitoramento('${id}', '${key}_data', this.value)" value="${getSmartNota(id, key+'_data')}"></td>
+                        <td class="p-3"><input type="text" placeholder="Sem" class="w-16 border p-2 rounded" onchange="salvarSmartNota('${id}', '${key}_ig', this.value)" value="${getSmartNota(id, key+'_ig')}"></td>
+                        <td class="p-3"><input type="text" placeholder="120/80" class="w-20 border p-2 rounded" onchange="salvarSmartNota('${id}', '${key}_pa', this.value)" value="${getSmartNota(id, key+'_pa')}"></td>
+                        <td class="p-3"><input type="text" placeholder="kg/cm" class="w-20 border p-2 rounded" onchange="salvarSmartNota('${id}', '${key}_pa_alt', this.value)" value="${getSmartNota(id, key+'_pa_alt')}"></td>
+                        <td class="p-3"><input type="text" placeholder="Méd/Enf" class="w-24 border p-2 rounded" onchange="salvarSmartNota('${id}', '${key}_prof', this.value)" value="${getSmartNota(id, key+'_prof')}"></td>
+                        <td class="p-3"><input type="checkbox" onchange="salvarSmart('${id}', '${key}', this.checked)" ${getSmart(id, key)} class="w-4 h-4 text-pink-600 rounded"></td>
+                    </tr>`;
+            }
+            html += `</tbody></table></div></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-white border-2 border-pink-400 rounded-lg overflow-hidden">
+                            <div class="bg-pink-400 text-white p-3 font-bold text-sm">TESTES 1º TRIMESTRE</div>
+                            <div class="p-3 space-y-2">
+                                <input type="date" class="w-full text-xs p-2 border rounded" onchange="salvarSmartNota('${id}', 'c3_t1_data', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_t1_data', this.value)" value="${getSmartNota(id, 'c3_t1_data')}">
+                                <input type="text" placeholder="Sífilis (Res)" class="w-full text-xs p-2 border rounded" onchange="salvarSmartNota('${id}', 'c3_t1_sif', this.value)" value="${getSmartNota(id, 'c3_t1_sif')}">
+                                <input type="text" placeholder="HIV (Res)" class="w-full text-xs p-2 border rounded" onchange="salvarSmartNota('${id}', 'c3_t1_hiv', this.value)" value="${getSmartNota(id, 'c3_t1_hiv')}">
+                                <input type="text" placeholder="Hepatite B" class="w-full text-xs p-2 border rounded" onchange="salvarSmartNota('${id}', 'c3_t1_hepb', this.value)" value="${getSmartNota(id, 'c3_t1_hepb')}">
+                                <input type="text" placeholder="Hepatite C" class="w-full text-xs p-2 border rounded" onchange="salvarSmartNota('${id}', 'c3_t1_hepc', this.value)" value="${getSmartNota(id, 'c3_t1_hepc')}">
+                                <label class="text-xs font-bold"><input type="checkbox" onchange="salvarSmart('${id}', 'c3_t1_ok', this.checked)" ${getSmart(id, 'c3_t1_ok')}> Concluído 1º Tri</label>
+                            </div>
+                        </div>
+                        <div class="bg-white border-2 border-pink-400 rounded-lg overflow-hidden">
+                            <div class="bg-pink-400 text-white p-3 font-bold text-sm">TESTES 3º TRIMESTRE</div>
+                            <div class="p-3 space-y-2">
+                                <input type="date" class="w-full text-xs p-2 border rounded" onchange="salvarSmartNota('${id}', 'c3_t3_data', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_t3_data', this.value)" value="${getSmartNota(id, 'c3_t3_data')}">
+                                <input type="text" placeholder="Sífilis (Res)" class="w-full text-xs p-2 border rounded" onchange="salvarSmartNota('${id}', 'c3_t3_sif', this.value)" value="${getSmartNota(id, 'c3_t3_sif')}">
+                                <input type="text" placeholder="HIV (Res)" class="w-full text-xs p-2 border rounded" onchange="salvarSmartNota('${id}', 'c3_t3_hiv', this.value)" value="${getSmartNota(id, 'c3_t3_hiv')}">
+                                <label class="text-xs font-bold mt-4 block"><input type="checkbox" onchange="salvarSmart('${id}', 'c3_t3_ok', this.checked)" ${getSmart(id, 'c3_t3_ok')}> Concluído 3º Tri</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white border-2 border-pink-500 rounded-lg overflow-hidden">
+                        <div class="bg-pink-500 text-white p-3 font-bold uppercase">Vacinação, Odonto e Visitas ACS</div>
+                        <div class="p-3 space-y-3">
+                            <div class="flex items-center gap-3 border-b pb-2">
+                                <input type="checkbox" onchange="salvarSmart('${id}', 'c3_vac', this.checked)" ${getSmart(id, 'c3_vac')} class="w-5 h-5 rounded text-pink-600">
+                                <span class="text-xs font-bold w-32">Vacina dTpa</span>
+                                <input type="date" class="border p-1 text-xs rounded" onchange="salvarSmartNota('${id}', 'c3_vac_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_vac_dt', this.value)" value="${getSmartNota(id, 'c3_vac_dt')}">
+                            </div>
+                            <div class="flex items-center gap-3 border-b pb-2">
+                                <input type="checkbox" onchange="salvarSmart('${id}', 'c3_odonto', this.checked)" ${getSmart(id, 'c3_odonto')} class="w-5 h-5 rounded text-pink-600">
+                                <span class="text-xs font-bold w-32">Avaliação Odonto</span>
+                                <input type="date" class="border p-1 text-xs rounded" onchange="salvarSmartNota('${id}', 'c3_od_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_od_dt', this.value)" value="${getSmartNota(id, 'c3_od_dt')}">
+                            </div>
+                            <div class="flex items-center gap-3 border-b pb-2">
+                                <span class="text-xs font-bold w-32">Visita ACS 1</span>
+                                <input type="date" class="border p-1 text-xs rounded" onchange="salvarSmartNota('${id}', 'c3_v1_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_v1_dt', this.value)" value="${getSmartNota(id, 'c3_v1_dt')}">
+                                <input type="checkbox" onchange="salvarSmart('${id}', 'c3_v1', this.checked)" ${getSmart(id, 'c3_v1')} class="w-5 h-5 rounded text-pink-600">
+                            </div>
+                            <div class="flex items-center gap-3 border-b pb-2">
+                                <span class="text-xs font-bold w-32">Visita ACS 2</span>
+                                <input type="date" class="border p-1 text-xs rounded" onchange="salvarSmartNota('${id}', 'c3_v2_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_v2_dt', this.value)" value="${getSmartNota(id, 'c3_v2_dt')}">
+                                <input type="checkbox" onchange="salvarSmart('${id}', 'c3_v2', this.checked)" ${getSmart(id, 'c3_v2')} class="w-5 h-5 rounded text-pink-600">
+                            </div>
+                            <div class="flex items-center gap-3 border-b pb-2">
+                                <span class="text-xs font-bold w-32">Visita ACS 3</span>
+                                <input type="date" class="border p-1 text-xs rounded" onchange="salvarSmartNota('${id}', 'c3_v3_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c3_v3_dt', this.value)" value="${getSmartNota(id, 'c3_v3_dt')}">
+                                <input type="checkbox" onchange="salvarSmart('${id}', 'c3_v3', this.checked)" ${getSmart(id, 'c3_v3')} class="w-5 h-5 rounded text-pink-600">
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            return html;
+        }
+
+        function renderC4(pessoa) {
+            const id = pessoa.id;
+            const dataLimiteAnual = new Date(ANO_ATUAL, 11, 31, 23, 59, 59); 
+            const v0 = getSmartNota(id, 'c4_v0_dt'); const v1 = getSmartNota(id, 'c4_v1_dt'); const v2 = getSmartNota(id, 'c4_v2_dt');
+            const diffAcs1 = diferencaDias(v0, v1); const diffAcs2 = diferencaDias(v1, v2);
+            let alertaAcs1 = (diffAcs1 !== null && diffAcs1 < 30) ? `<br><span class="alerta-intervalo"><i class="fas fa-exclamation-triangle"></i> V0->V1 (${diffAcs1}d). Mín 30.</span>` : '';
+            let alertaAcs2 = (diffAcs2 !== null && diffAcs2 < 30) ? `<br><span class="alerta-intervalo"><i class="fas fa-exclamation-triangle"></i> V1->V2 (${diffAcs2}d). Mín 30.</span>` : '';
+
+            let html = `
+                <div class="space-y-4 mb-8 border p-4 rounded-xl bg-white shadow-sm border-orange-400">
+                    <h3 class="text-xl font-black text-orange-800 uppercase mb-2"><i class="fas fa-droplet mr-2"></i>C.4 - Pessoa com Diabetes</h3>
+                    <div class="bg-orange-50 text-orange-900 p-2 rounded text-xs font-bold mb-4 border border-orange-200">Data Limite Anual: 31/12/${ANO_ATUAL}</div>
+                    <div class="bg-white border-2 border-orange-500 rounded-lg overflow-hidden">
+                        <div class="bg-orange-500 text-white p-3 font-bold uppercase text-xs">Acompanhamento Semestral e Anual</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-orange-50 text-orange-800">
+                                    <tr><th class="p-3">Indicador</th><th class="p-3">Data Realizada</th><th class="p-3">Resultados / Obs</th><th class="p-3 text-center">OK</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b"><td class="p-3 font-bold">Consulta 1º Semestre</td><td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', 'c4_cons1_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c4_cons1_dt', this.value)" value="${getSmartNota(id, 'c4_cons1_dt')}"></td><td class="p-3"><div class="flex gap-2 mb-1"><input type="text" placeholder="PA" class="border p-2 rounded w-24" onchange="salvarSmartNota('${id}', 'c4_pa1', this.value)" value="${getSmartNota(id, 'c4_pa1')}"><input type="text" placeholder="Profissional" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c4_cons1_prof', this.value)" value="${getSmartNota(id, 'c4_cons1_prof')}"></div><input type="text" placeholder="Obs..." class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c4_cons1_obs', this.value)" value="${getSmartNota(id, 'c4_cons1_obs')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c4_cons1_ok', this.checked)" ${getSmart(id, 'c4_cons1_ok')} class="w-5 h-5 text-orange-500 rounded"></td></tr>
+                                    <tr class="border-b"><td class="p-3 font-bold">Consulta 2º Semestre</td><td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', 'c4_cons2_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c4_cons2_dt', this.value)" value="${getSmartNota(id, 'c4_cons2_dt')}"></td><td class="p-3"><div class="flex gap-2 mb-1"><input type="text" placeholder="PA" class="border p-2 rounded w-24" onchange="salvarSmartNota('${id}', 'c4_pa2', this.value)" value="${getSmartNota(id, 'c4_pa2')}"><input type="text" placeholder="Profissional" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c4_cons2_prof', this.value)" value="${getSmartNota(id, 'c4_cons2_prof')}"></div><input type="text" placeholder="Obs..." class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c4_cons2_obs', this.value)" value="${getSmartNota(id, 'c4_cons2_obs')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c4_cons2_ok', this.checked)" ${getSmart(id, 'c4_cons2_ok')} class="w-5 h-5 text-orange-500 rounded"></td></tr>
+                                    <tr class="border-b bg-gray-50"><td class="p-3 font-bold">02 Visitas ACS ${alertaAcs1}${alertaAcs2}</td><td class="p-3"><div class="text-[10px] font-bold">Ref: <input type="date" class="border p-1 rounded" onchange="salvarSmartNota('${id}', 'c4_v0_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c4_v0_dt', this.value)" value="${v0}"></div><div class="text-[10px] font-bold">V1: <input type="date" class="border p-1 rounded" onchange="salvarSmartNota('${id}', 'c4_v1_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c4_v1_dt', this.value)" value="${v1}"></div><div class="text-[10px] font-bold">V2: <input type="date" class="border p-1 rounded" onchange="salvarSmartNota('${id}', 'c4_v2_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c4_v2_dt', this.value)" value="${v2}"></div></td><td class="p-3 text-[10px] font-bold text-gray-500">Lim: ${formatarDataDisplay(dataLimiteAnual)}<br>${verificarStatus(dataLimiteAnual)}</td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c4_vis_ok', this.checked)" ${getSmart(id, 'c4_vis_ok')} class="w-5 h-5 text-orange-500 rounded"></td></tr>
+                                    <tr class="border-b"><td class="p-3 font-bold">Peso e Altura</td><td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', 'c4_pa_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c4_pa_dt', this.value)" value="${getSmartNota(id, 'c4_pa_dt')}"></td><td class="p-3"><input type="text" placeholder="Kg / Altura" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c4_pa_val', this.value)" value="${getSmartNota(id, 'c4_pa_val')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c4_pa_ok', this.checked)" ${getSmart(id, 'c4_pa_ok')} class="w-5 h-5 text-orange-500 rounded"></td></tr>
+                                    <tr class="border-b bg-gray-50"><td class="p-3 font-bold">Hemoglobina Glicada</td><td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', 'c4_hg_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c4_hg_dt', this.value)" value="${getSmartNota(id, 'c4_hg_dt')}"></td><td class="p-3"><input type="text" placeholder="Resultado (%)" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c4_hg_val', this.value)" value="${getSmartNota(id, 'c4_hg_val')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c4_hg_ok', this.checked)" ${getSmart(id, 'c4_hg_ok')} class="w-5 h-5 text-orange-500 rounded"></td></tr>
+                                    <tr class="border-b"><td class="p-3 font-bold">Avaliação dos Pés</td><td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', 'c4_pe_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c4_pe_dt', this.value)" value="${getSmartNota(id, 'c4_pe_dt')}"></td><td class="p-3"><input type="text" placeholder="Normal/Alterado" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c4_pe_val', this.value)" value="${getSmartNota(id, 'c4_pe_val')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c4_pe_ok', this.checked)" ${getSmart(id, 'c4_pe_ok')} class="w-5 h-5 text-orange-500 rounded"></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
+            return html;
+        }
+
+        function renderC5(pessoa) {
+            const id = pessoa.id;
+            const dataLimiteAnual = new Date(ANO_ATUAL, 11, 31, 23, 59, 59);
+            const v0 = getSmartNota(id, 'c5_v0_dt'); const v1 = getSmartNota(id, 'c5_v1_dt'); const v2 = getSmartNota(id, 'c5_v2_dt');
+            const diffAcs1 = diferencaDias(v0, v1); const diffAcs2 = diferencaDias(v1, v2);
+            let alertaAcs1 = (diffAcs1 !== null && diffAcs1 < 30) ? `<br><span class="alerta-intervalo"><i class="fas fa-exclamation-triangle"></i> V0->V1 (${diffAcs1}d). Mín 30.</span>` : '';
+            let alertaAcs2 = (diffAcs2 !== null && diffAcs2 < 30) ? `<br><span class="alerta-intervalo"><i class="fas fa-exclamation-triangle"></i> V1->V2 (${diffAcs2}d). Mín 30.</span>` : '';
+
+            let html = `
+                <div class="space-y-4 mb-8 border p-4 rounded-xl bg-white shadow-sm border-red-400">
+                    <h3 class="text-xl font-black text-red-800 uppercase mb-2"><i class="fas fa-heartbeat mr-2"></i>C.5 - Hipertensão</h3>
+                    <div class="bg-red-50 text-red-900 p-2 rounded text-xs font-bold mb-4 border border-red-200">Data Limite Anual: 31/12/${ANO_ATUAL}</div>
+                    <div class="bg-white border-2 border-red-500 rounded-lg overflow-hidden">
+                        <div class="bg-red-500 text-white p-3 font-bold uppercase text-xs">Acompanhamento Semestral e Anual</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-red-50 text-red-800">
+                                    <tr><th class="p-3">Indicador</th><th class="p-3">Data Realizada</th><th class="p-3">Resultados / Obs</th><th class="p-3 text-center">OK</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b"><td class="p-3 font-bold">Consulta 1º Semestre</td><td class="p-3"><input type="date" class="border p-2 rounded mb-1 w-32" onchange="salvarSmartNota('${id}', 'c5_cons1_dt', this.value)" onblur="salvarERecarregar('${id}', 'c5_cons1_dt', this.value)" value="${getSmartNota(id, 'c5_cons1_dt')}"></td><td class="p-3"><div class="flex gap-2 mb-1"><input type="text" placeholder="PA" class="border p-2 rounded w-24" onchange="salvarSmartNota('${id}', 'c5_pa1', this.value)" value="${getSmartNota(id, 'c5_pa1')}"><input type="text" placeholder="Profissional" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c5_cons1_prof', this.value)" value="${getSmartNota(id, 'c5_cons1_prof')}"></div><input type="text" placeholder="Obs..." class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c5_cons1_obs', this.value)" value="${getSmartNota(id, 'c5_cons1_obs')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c5_cons1_ok', this.checked)" ${getSmart(id, 'c5_cons1_ok')} class="w-5 h-5 text-red-500 rounded"></td></tr>
+                                    <tr class="border-b"><td class="p-3 font-bold">Consulta 2º Semestre</td><td class="p-3"><input type="date" class="border p-2 rounded mb-1 w-32" onchange="salvarSmartNota('${id}', 'c5_cons2_dt', this.value)" onblur="salvarERecarregar('${id}', 'c5_cons2_dt', this.value)" value="${getSmartNota(id, 'c5_cons2_dt')}"></td><td class="p-3"><div class="flex gap-2 mb-1"><input type="text" placeholder="PA" class="border p-2 rounded w-24" onchange="salvarSmartNota('${id}', 'c5_pa2', this.value)" value="${getSmartNota(id, 'c5_pa2')}"><input type="text" placeholder="Profissional" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c5_cons2_prof', this.value)" value="${getSmartNota(id, 'c5_cons2_prof')}"></div><input type="text" placeholder="Obs..." class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c5_cons2_obs', this.value)" value="${getSmartNota(id, 'c5_cons2_obs')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c5_cons2_ok', this.checked)" ${getSmart(id, 'c5_cons2_ok')} class="w-5 h-5 text-red-500 rounded"></td></tr>
+                                    <tr class="border-b bg-gray-50"><td class="p-3 font-bold">02 Visitas ACS ${alertaAcs1}${alertaAcs2}</td><td class="p-3"><div class="text-[10px] font-bold">Ref: <input type="date" class="border p-1 rounded w-full" onchange="salvarSmartNota('${id}', 'c5_v0_dt', this.value)" onblur="salvarERecarregar('${id}', 'c5_v0_dt', this.value)" value="${v0}"></div><div class="text-[10px] font-bold">V1: <input type="date" class="border p-1 rounded w-full" onchange="salvarSmartNota('${id}', 'c5_v1_dt', this.value)" onblur="salvarERecarregar('${id}', 'c5_v1_dt', this.value)" value="${v1}"></div><div class="text-[10px] font-bold">V2: <input type="date" class="border p-1 rounded w-full" onchange="salvarSmartNota('${id}', 'c5_v2_dt', this.value)" onblur="salvarERecarregar('${id}', 'c5_v2_dt', this.value)" value="${v2}"></div></td><td class="p-3 text-[10px] font-bold text-gray-500">Lim: ${formatarDataDisplay(dataLimiteAnual)}<br>${verificarStatus(dataLimiteAnual)}</td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c5_vis_ok', this.checked)" ${getSmart(id, 'c5_vis_ok')} class="w-5 h-5 text-red-500 rounded"></td></tr>
+                                    <tr class="border-b"><td class="p-3 font-bold">Peso e Altura</td><td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', 'c5_pa_dt', this.value)" onblur="salvarERecarregar('${id}', 'c5_pa_dt', this.value)" value="${getSmartNota(id, 'c5_pa_dt')}"></td><td class="p-3"><input type="text" placeholder="Kg / cm" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c5_pa_val', this.value)" value="${getSmartNota(id, 'c5_pa_val')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c5_pa_ok', this.checked)" ${getSmart(id, 'c5_pa_ok')} class="w-5 h-5 text-red-500 rounded"></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
+            return html;
+        }
+
+        function renderC6(pessoa) {
+            const id = pessoa.id;
+            const dataLimiteAnual = new Date(ANO_ATUAL, 11, 31, 23, 59, 59);
+            const v0 = getSmartNota(id, 'c6_v0_dt'); const v1 = getSmartNota(id, 'c6_v1_dt'); const v2 = getSmartNota(id, 'c6_v2_dt');
+            const diffAcs1 = diferencaDias(v0, v1); const diffAcs2 = diferencaDias(v1, v2);
+            let alertaAcs1 = (diffAcs1 !== null && diffAcs1 < 30) ? `<br><span class="alerta-intervalo"><i class="fas fa-exclamation-triangle"></i> Erro V0->V1 (${diffAcs1}d). Mín 30.</span>` : '';
+            let alertaAcs2 = (diffAcs2 !== null && diffAcs2 < 30) ? `<br><span class="alerta-intervalo"><i class="fas fa-exclamation-triangle"></i> Erro V1->V2 (${diffAcs2}d). Mín 30.</span>` : '';
+
+            let html = `
+                <div class="space-y-4 mb-8 border p-4 rounded-xl bg-white shadow-sm border-purple-400">
+                    <h3 class="text-xl font-black text-purple-800 uppercase mb-2"><i class="fas fa-person-cane mr-2"></i>C.6 - Pessoa Idosa</h3>
+                    <div class="bg-purple-50 text-purple-900 p-2 rounded text-xs font-bold mb-4 border border-purple-200">Data Limite Anual: 31/12/${ANO_ATUAL}</div>
+                    <div class="bg-white border-2 border-purple-500 rounded-lg overflow-hidden">
+                        <div class="bg-purple-500 text-white p-3 font-bold uppercase text-xs">Acompanhamento Anual</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-purple-50 text-purple-800">
+                                    <tr><th class="p-3">Indicador</th><th class="p-3">Data Realizada</th><th class="p-3">Resultados / Obs</th><th class="p-3 text-center">OK</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b"><td class="p-3 font-bold">Consulta (Médica/Enf)</td><td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', 'c6_cons_dt', this.value)" onblur="salvarERecarregar('${id}', 'c6_cons_dt', this.value)" value="${getSmartNota(id, 'c6_cons_dt')}"></td><td class="p-3"><input type="text" placeholder="Prof/Obs..." class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c6_cons_prof', this.value)" value="${getSmartNota(id, 'c6_cons_prof')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c6_cons_ok', this.checked)" ${getSmart(id, 'c6_cons_ok')} class="w-5 h-5 text-purple-500 rounded"></td></tr>
+                                    <tr class="border-b bg-gray-50"><td class="p-3 font-bold">02 Reg. de Peso e Altura</td><td class="p-3"><div class="text-[10px] font-bold">1º Reg: <input type="date" class="border p-1 rounded w-full" onchange="salvarSmartNota('${id}', 'c6_pa1_dt', this.value)" onblur="salvarERecarregar('${id}', 'c6_pa1_dt', this.value)" value="${getSmartNota(id, 'c6_pa1_dt')}"></div><div class="text-[10px] font-bold">2º Reg: <input type="date" class="border p-1 rounded w-full" onchange="salvarSmartNota('${id}', 'c6_pa2_dt', this.value)" onblur="salvarERecarregar('${id}', 'c6_pa2_dt', this.value)" value="${getSmartNota(id, 'c6_pa2_dt')}"></div></td><td class="p-3"><input type="text" placeholder="Kg/cm e Obs..." class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c6_pa_obs', this.value)" value="${getSmartNota(id, 'c6_pa_obs')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c6_pa_ok', this.checked)" ${getSmart(id, 'c6_pa_ok')} class="w-5 h-5 text-purple-500 rounded"></td></tr>
+                                    <tr class="border-b"><td class="p-3 font-bold">02 Visitas ACS ${alertaAcs1}${alertaAcs2}</td><td class="p-3"><div class="text-[10px] font-bold">Ref: <input type="date" class="border p-1 rounded w-full" onchange="salvarSmartNota('${id}', 'c6_v0_dt', this.value)" onblur="salvarERecarregar('${id}', 'c6_v0_dt', this.value)" value="${v0}"></div><div class="text-[10px] font-bold">V1: <input type="date" class="border p-1 rounded w-full" onchange="salvarSmartNota('${id}', 'c6_v1_dt', this.value)" onblur="salvarERecarregar('${id}', 'c6_v1_dt', this.value)" value="${v1}"></div><div class="text-[10px] font-bold">V2: <input type="date" class="border p-1 rounded w-full" onchange="salvarSmartNota('${id}', 'c6_v2_dt', this.value)" onblur="salvarERecarregar('${id}', 'c6_v2_dt', this.value)" value="${v2}"></div></td><td class="p-3 text-[10px] font-bold text-gray-500">Lim: ${formatarDataDisplay(dataLimiteAnual)}<br>${verificarStatus(dataLimiteAnual)}</td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c6_vis_ok', this.checked)" ${getSmart(id, 'c6_vis_ok')} class="w-5 h-5 text-purple-500 rounded"></td></tr>
+                                    <tr class="border-b bg-gray-50"><td class="p-3 font-bold">Vacina Influenza</td><td class="p-3"><input type="date" class="border p-2 rounded w-32" onchange="salvarSmartNota('${id}', 'c6_vac_dt', this.value)" onblur="salvarERecarregar('${id}', 'c6_vac_dt', this.value)" value="${getSmartNota(id, 'c6_vac_dt')}"></td><td class="p-3"><input type="text" placeholder="Lote / Vac" class="border p-2 rounded w-full" onchange="salvarSmartNota('${id}', 'c6_vac_obs', this.value)" value="${getSmartNota(id, 'c6_vac_obs')}"></td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c6_vac_ok', this.checked)" ${getSmart(id, 'c6_vac_ok')} class="w-5 h-5 text-purple-500 rounded"></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
+            return html;
+        }
+
+        function renderC7(pessoa) {
+            const id = pessoa.id;
+            const idade = calcularIdadeAnos(pessoa.dataNasc);
+            const papDt = getSmartNota(id, 'c7_pap_dt'); const papVenc = somarAnosStr(papDt, 3);
+            const mamaDt = getSmartNota(id, 'c7_mama_dt'); const mamaVenc = somarAnosStr(mamaDt, 2);
+            const sexDt = getSmartNota(id, 'c7_sex_dt'); const sexVenc = somarAnosStr(sexDt, 1);
+
+            let hpvAlerta = ''; let limiteHpv = null;
+            if(pessoa.dataNasc) {
+                limiteHpv = somarAnosStr(pessoa.dataNasc, 15);
+                if (idade > 14) hpvAlerta = `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-black mt-1 block w-max">IDADE INVÁLIDA (> 14a)</span>`;
+                else hpvAlerta = `<span class="text-blue-600 text-[10px] font-bold block mt-1">Limite (15a): ${formatarDataDisplay(limiteHpv)}</span>`;
+            }
+
+            let html = `
+                <div class="space-y-4 mb-8 border p-4 rounded-xl bg-white shadow-sm border-blue-400">
+                    <h3 class="text-xl font-black text-blue-800 uppercase mb-2"><i class="fas fa-person-dress mr-2"></i>C.7 - Prevenção na Mulher</h3>
+                    <div class="bg-white border-2 border-blue-500 rounded-lg overflow-hidden">
+                        <div class="bg-blue-500 text-white p-3 font-bold uppercase text-xs">Rastreamento Automático</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-blue-50 text-blue-800">
+                                    <tr><th class="p-3">Exame / Faixa</th><th class="p-3">Última Realização</th><th class="p-3">Status Automático</th><th class="p-3 text-center">OK</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b"><td class="p-3 font-bold">Preventivo (25-64 anos) <br><span class="font-normal text-[10px] text-gray-500">Validade: 36 meses</span></td><td class="p-3"><input type="date" class="border p-2 rounded w-32 mb-1" onchange="salvarSmartNota('${id}', 'c7_pap_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c7_pap_dt', this.value)" value="${papDt}"><br><select onchange="salvarSmartNota('${id}', 'c7_pap_loc', this.value)" class="border p-1.5 rounded w-32 text-[10px]"><option value="">Onde fez?</option><option value="SUS" ${getSmartNota(id, 'c7_pap_loc')=='SUS'?'selected':''}>SUS</option><option value="Particular" ${getSmartNota(id, 'c7_pap_loc')=='Particular'?'selected':''}>PART</option></select></td><td class="p-3 font-medium">${papDt ? verificarPrazo(papVenc) : '<span class="text-gray-400 text-[10px]">Aguardando data</span>'}</td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c7_pap_ok', this.checked)" ${getSmart(id, 'c7_pap_ok')} class="w-5 h-5 text-blue-500 rounded"></td></tr>
+                                    <tr class="border-b bg-gray-50"><td class="p-3 font-bold">Vacina HPV (09-14 anos) ${hpvAlerta}</td><td class="p-3"><input type="date" class="border p-2 rounded w-32 mb-1" onchange="salvarSmartNota('${id}', 'c7_hpv_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c7_hpv_dt', this.value)" value="${getSmartNota(id, 'c7_hpv_dt')}"><br><input type="text" placeholder="Lote / Vac" class="border p-1.5 rounded w-32 text-[10px]" onchange="salvarSmartNota('${id}', 'c7_hpv_obs', this.value)" value="${getSmartNota(id, 'c7_hpv_obs')}"></td><td class="p-3 font-medium">${idade > 14 ? '<span class="text-red-500 text-[10px] font-bold">IDADE INVÁLIDA</span>' : (limiteHpv ? verificarPrazo(limiteHpv) : '')}</td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c7_hpv_ok', this.checked)" ${getSmart(id, 'c7_hpv_ok')} class="w-5 h-5 text-blue-500 rounded"></td></tr>
+                                    <tr class="border-b"><td class="p-3 font-bold">Saúde Sexual/Reprod. <br><span class="font-normal text-[10px] text-gray-500">Validade: 12 meses</span></td><td class="p-3"><input type="date" class="border p-2 rounded w-32 mb-1" onchange="salvarSmartNota('${id}', 'c7_sex_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c7_sex_dt', this.value)" value="${sexDt}"><br><input type="text" placeholder="Profissional" class="border p-1.5 rounded w-32 text-[10px]" onchange="salvarSmartNota('${id}', 'c7_sex_obs', this.value)" value="${getSmartNota(id, 'c7_sex_obs')}"></td><td class="p-3 font-medium">${sexDt ? verificarPrazo(sexVenc) : '<span class="text-gray-400 text-[10px]">Aguardando data</span>'}</td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c7_sex_ok', this.checked)" ${getSmart(id, 'c7_sex_ok')} class="w-5 h-5 text-blue-500 rounded"></td></tr>
+                                    <tr class="border-b bg-gray-50"><td class="p-3 font-bold">Mamografia (50-69 anos) <br><span class="font-normal text-[10px] text-gray-500">Validade: 24 meses</span></td><td class="p-3"><input type="date" class="border p-2 rounded w-32 mb-1" onchange="salvarSmartNota('${id}', 'c7_mama_dt', this.value)" onblur="recarregarMonitoramento('${id}', 'c7_mama_dt', this.value)" value="${mamaDt}"></td><td class="p-3 font-medium">${mamaDt ? verificarPrazo(mamaVenc) : '<span class="text-gray-400 text-[10px]">Aguardando data</span>'}</td><td class="p-3 text-center"><input type="checkbox" onchange="salvarSmart('${id}', 'c7_mama_ok', this.checked)" ${getSmart(id, 'c7_mama_ok')} class="w-5 h-5 text-blue-500 rounded"></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
+            return html;
+        }
+
+        // ==========================================
+        // CÁLCULO DE PROGRESSO E DASHBOARD
+        // ==========================================
+        function getProgressoCidadao(p) {
+            let total = 0; let feitos = 0;
+            const chk = db.checklists[p.id] || {};
+            if(!p.condicoesArray || p.condicoesArray.length === 0) return { total: 0, feitos: 0 };
+
+            p.condicoesArray.forEach(c => {
+                if(c === "Desenvolvimento Infantil") {
+                    total += 21;
+                    if(chk['c2_v30']?.checked) feitos++;
+                    if(chk['c2_v6m']?.checked) feitos++;
+                    for(let i=1; i<=9; i++) {
+                        if(chk[`cons_${i}`]?.checked) feitos++;
+                        if(chk[`pa_${i}`]?.checked) feitos++;
+                    }
+                } else if (c === "Cuidado da Gestante e da Puérpera") {
+                    total += 17;
+                    for(let i=1; i<=8; i++) { if(chk[`c3_cons_${i}`]?.checked) feitos++; }
+                    if(chk['c3_t1_ok']?.checked) feitos++; if(chk['c3_t3_ok']?.checked) feitos++;
+                    if(chk['c3_vac']?.checked) feitos++; if(chk['c3_odonto']?.checked) feitos++;
+                    if(chk['c3_v1']?.checked) feitos++; if(chk['c3_v2']?.checked) feitos++; if(chk['c3_v3']?.checked) feitos++;
+                    if(chk['c3_puerp_cons']?.checked) feitos++; if(chk['c3_puerp_visita']?.checked) feitos++;
+                } else if (c === "Cuidado da Pessoa com Diabetes") {
+                    total += 6;
+                    if(chk['c4_cons1_ok']?.checked) feitos++; if(chk['c4_cons2_ok']?.checked) feitos++;
+                    if(chk['c4_vis_ok']?.checked) feitos++; if(chk['c4_pa_ok']?.checked) feitos++;
+                    if(chk['c4_hg_ok']?.checked) feitos++; if(chk['c4_pe_ok']?.checked) feitos++;
+                } else if (c === "Cuidado da Pessoa com Hipertensão") {
+                    total += 4;
+                    if(chk['c5_cons1_ok']?.checked) feitos++; if(chk['c5_cons2_ok']?.checked) feitos++;
+                    if(chk['c5_vis_ok']?.checked) feitos++; if(chk['c5_pa_ok']?.checked) feitos++;
+                } else if (c === "Cuidado da Pessoa Idosa") {
+                    total += 4;
+                    if(chk['c6_cons_ok']?.checked) feitos++; if(chk['c6_pa_ok']?.checked) feitos++;
+                    if(chk['c6_vis_ok']?.checked) feitos++; if(chk['c6_vac_ok']?.checked) feitos++;
+                } else if (c === "Prevenção do Câncer na Mulher") {
+                    total += 4;
+                    if(chk['c7_pap_ok']?.checked) feitos++; if(chk['c7_hpv_ok']?.checked) feitos++;
+                    if(chk['c7_sex_ok']?.checked) feitos++; if(chk['c7_mama_ok']?.checked) feitos++;
+                }
+            });
+            return { total, feitos };
+        }
+
+        function renderDashboard() {
+            document.getElementById('statTotal').innerText = db.pessoas.length;
+            
+            // Gráficos Pizza
+            let contagens = {};
+            categoriasOficiais.forEach(c => contagens[c.nome] = 0);
+            db.pessoas.forEach(p => { if(p.condicoesArray) p.condicoesArray.forEach(c => { if(contagens[c] !== undefined) contagens[c]++; }); });
+
+            const labels = []; const dataCounts = []; const bgColors = []; const legendaHtml = [];
+            categoriasOficiais.forEach(cat => {
+                labels.push(cat.nome); dataCounts.push(contagens[cat.nome]); bgColors.push(cat.cor);
+                legendaHtml.push(`
+                    <div class="flex items-center justify-between border-b pb-2 last:border-0 hover:bg-gray-50 p-2 rounded transition">
+                        <div class="flex items-center gap-3">
+                            <div class="w-4 h-4 rounded shadow-sm border border-black/10" style="background-color: ${cat.cor}"></div>
+                            <span class="text-xs font-black uppercase text-gray-700 tracking-wide">${cat.nome}</span>
+                        </div>
+                        <span class="font-black text-xl text-gray-900 bg-gray-100 px-3 py-1 rounded-lg">${contagens[cat.nome]}</span>
+                    </div>`);
+            });
+            document.getElementById('legendaGrafico').innerHTML = legendaHtml.join('');
+
+            const ctx = document.getElementById('chartPopulacao').getContext('2d');
+            if(window.meuGrafico) window.meuGrafico.destroy();
+            window.meuGrafico = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: categoriasOficiais.map(c => c.id), datasets: [{ label: 'Qtd. Pessoas', data: dataCounts, backgroundColor: bgColors, borderRadius: 4 }] },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+            });
+
+            // Tabela de Ruas (Dashboard)
+            let ruasData = {};
+            db.pessoas.forEach(p => {
+                const r = p.rua || "NÃO INFORMADA";
+                if(!ruasData[r]) ruasData[r] = { cid: 0, tot: 0, feit: 0 };
+                ruasData[r].cid++;
+                const prog = getProgressoCidadao(p);
+                ruasData[r].tot += prog.total;
+                ruasData[r].feit += prog.feitos;
+            });
+
+            let htmlRuas = '';
+            Object.keys(ruasData).sort().forEach(r => {
+                const d = ruasData[r];
+                const pct = d.tot > 0 ? Math.round((d.feit / d.tot) * 100) : 0;
+                const cor = pct >= 80 ? 'bg-green-500' : (pct >= 50 ? 'bg-yellow-500' : 'bg-red-500');
+                const textCor = pct >= 80 ? 'text-green-600' : (pct >= 50 ? 'text-yellow-600' : 'text-red-600');
+                htmlRuas += `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="p-3 font-bold text-gray-800">${r}</td>
+                    <td class="p-3 text-center font-bold text-gray-500">${d.cid} <span class="text-[10px]">Pessoas</span></td>
+                    <td class="p-3 text-center font-black ${textCor} text-lg">${pct}%</td>
+                    <td class="p-3">
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div class="${cor} h-3 rounded-full" style="width: ${pct}%"></div>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+            document.getElementById('tabelaRuasDashboard').innerHTML = htmlRuas;
+        }
+
+        // ==========================================
+        // IMPORT/EXPORT
+        // ==========================================
+        function exportarDados() {
+            const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'backup_saude360.json'; a.click();
+        }
+        function importarDados(e) {
+            const reader = new FileReader();
+            reader.onload = (ev) => { 
+                try {
+                    db = JSON.parse(ev.target.result);
+                    db.pessoas.forEach(p => { if(!p.condicoesArray) p.condicoesArray = []; });
+                    salvarDB(); alert("Importado com sucesso!"); location.reload(); 
+                } catch(err) { alert("Arquivo corrompido!"); }
+            };
+            reader.readAsText(e.target.files[0]);
+        }
+
+        window.onload = () => { showTab('tabDash'); };
+    </script>
+</body>
+</html>
